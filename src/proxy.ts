@@ -1,35 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { decrypt } from "@/lib/actions/auth";
-import { cookies } from "next/headers";
+import { jwtVerify } from "jose";
 
-// Rutas que no requieren autenticación
 const publicRoutes = ["/login"];
 
 export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const isPublicRoute = publicRoutes.includes(path);
 
-  // Obtener el token de las cookies
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get("auth_session")?.value;
+  // Use req.cookies directly instead of next/headers in middleware
+  const sessionCookie = req.cookies.get("auth_session")?.value;
 
   try {
-    // Si la ruta no es pública y no hay sesión, redirigir al login
     if (!isPublicRoute && !sessionCookie) {
       return NextResponse.redirect(new URL("/login", req.nextUrl));
     }
 
-    // Verificar el token si existe
     if (sessionCookie) {
-      await decrypt(sessionCookie); // Lanza error si el token es inválido o expiró
+      const secretKey = process.env.JWT_SECRET || "";
+      const key = new TextEncoder().encode(secretKey);
+      await jwtVerify(sessionCookie, key, { algorithms: ["HS256"] });
     }
     
-    // Si es una ruta pública y ya hay sesión válida, redirigir al home
     if (isPublicRoute && sessionCookie) {
       return NextResponse.redirect(new URL("/", req.nextUrl));
     }
   } catch (error) {
-    // Si la validación del token falla, redirigir al login
     if (!isPublicRoute) {
       return NextResponse.redirect(new URL("/login", req.nextUrl));
     }
