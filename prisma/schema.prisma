@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  sku         String?  @unique
+  brand       String
+  name        String
+  category    String   @default("General")
+  flavor      String
+  size        String
+  lots        Lot[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([brand, name, flavor, size])
+}
+
+model Batch {
+  id              String       @id @default(cuid())
+  customLoteNumber Int?
+  freightTotalUsd Float
+  date            DateTime     @default(now())
+  items           ImportItem[]
+}
+
+model ImportItem {
+  id              String   @id @default(cuid())
+  importId        String
+  import          Batch    @relation(fields: [importId], references: [id])
+  productId       String
+  quantity        Int
+  costUsaUnit     Float
+  length          Float
+  width           Float
+  height          Float
+  expirationDate  DateTime
+  marginPercent   Float
+  lotId           String?  @unique
+  lot             Lot?
+}
+
+model Lot {
+  id              String      @id @default(cuid())
+  productId       String
+  product         Product     @relation(fields: [productId], references: [id])
+  importItemId    String      @unique
+  importItem      ImportItem  @relation(fields: [importItemId], references: [id])
+  initialQuantity Int
+  currentQuantity Int
+  costUsaUnit     Float
+  freightUnit     Float
+  landedCost      Float
+  priceSale       Float
+  expirationDate  DateTime
+  isVerified      Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  saleItems       SaleItem[]
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  address   String?
+  sales     Sale[]
+  createdAt DateTime @default(now())
+}
+
+model Sale {
+  id          String     @id @default(cuid())
+  customerId  String
+  customer    Customer   @relation(fields: [customerId], references: [id])
+  totalAmount Float
+  paymentType String     // "FULL" or "CREDIT"
+  leadSource  String?
+  date        DateTime   @default(now())
+  dueDate     DateTime?  // Only for CREDIT
+  items       SaleItem[]
+  payments    Payment[]
+}
+
+model SaleItem {
+  id        String @id @default(cuid())
+  saleId    String
+  sale      Sale   @relation(fields: [saleId], references: [id])
+  lotId     String
+  lot       Lot    @relation(fields: [lotId], references: [id])
+  quantity  Int
+  priceSale Float
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  saleId    String
+  sale      Sale     @relation(fields: [saleId], references: [id])
+  amount    Float
+  date      DateTime @default(now())
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  description String
+  amount      Float
+  category    String   // "Marketing", "Logística", "Operativo", "Otro"
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
+
+model ProductTemplate {
+  id        String   @id @default(cuid())
+  keyName   String   @unique
+  length    Float
+  width     Float
+  height    Float
+  category  String   @default("General")
+}
