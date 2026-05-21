@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 // Rutas que no requieren autenticación
 const publicRoutes = ["/login"];
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const isPublicRoute = publicRoutes.includes(path);
 
