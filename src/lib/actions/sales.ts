@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 export type SaleItemInput = {
   productId: string;
   quantity: number;
+  customPrice?: number; // Precio especial para un cliente (ej. amigo, precio de cortesía)
 };
 
 export type ProcessSaleInput = {
@@ -67,15 +68,20 @@ export async function processSale(data: ProcessSaleInput) {
           if (remainingQuantityToFulfill <= 0) break;
 
           const quantityFromThisLot = Math.min(lot.currentQuantity, remainingQuantityToFulfill);
+
+          // Use custom price if provided (precio especial), otherwise fall back to lot catalogue price
+          const effectivePrice = (item.customPrice != null && item.customPrice > 0)
+            ? item.customPrice
+            : lot.priceSale;
           
           // Calculate amount added to total (sale price * quantity)
-          totalAmount += lot.priceSale * quantityFromThisLot;
+          totalAmount += effectivePrice * quantityFromThisLot;
 
-          // Record deduction
+          // Record deduction — priceSale here is what was *actually* charged
           lotDeductions.push({
             lotId: lot.id,
             quantity: quantityFromThisLot,
-            priceSale: lot.priceSale,
+            priceSale: effectivePrice,
             costUsaUnit: lot.costUsaUnit,
             freightUnit: lot.freightUnit
           });

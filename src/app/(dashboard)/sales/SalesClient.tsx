@@ -15,7 +15,7 @@ export default function SalesClient({ customers, products }: { customers: any[],
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [newCustomerAddress, setNewCustomerAddress] = useState("");
-  const [selectedItems, setSelectedItems] = useState<{ productId: string; quantity: number; unitPrice: number; name: string }[]>([]);
+  const [selectedItems, setSelectedItems] = useState<{ productId: string; quantity: number; unitPrice: number; catalogPrice: number; name: string }[]>([]);
   const [paymentType, setPaymentType] = useState<"FULL" | "CREDIT">("FULL");
   const [upfrontPayment, setUpfrontPayment] = useState<string>("");
   const [leadSource, setLeadSource] = useState("");
@@ -40,7 +40,7 @@ export default function SalesClient({ customers, products }: { customers: any[],
     if (existingItem) {
       setSelectedItems(selectedItems.map(i => i.productId === productId ? { ...i, quantity: i.quantity + 1 } : i));
     } else {
-      setSelectedItems([...selectedItems, { productId, quantity: 1, unitPrice: priceSale, name: `${product.brand} ${product.name}` }]);
+      setSelectedItems([...selectedItems, { productId, quantity: 1, unitPrice: priceSale, catalogPrice: priceSale, name: `${product.brand} ${product.name}` }]);
     }
   };
 
@@ -85,6 +85,7 @@ export default function SalesClient({ customers, products }: { customers: any[],
           productId,
           quantity: 1,
           unitPrice: priceSale,
+          catalogPrice: priceSale,
           name: `${productName} (${productSize})`,
         },
       ];
@@ -120,7 +121,11 @@ export default function SalesClient({ customers, products }: { customers: any[],
     const res = await processSale({
       customerId,
       newCustomer: customerId === "NEW" ? { name: newCustomerName, phone: newCustomerPhone, address: newCustomerAddress } : undefined,
-      items: selectedItems.map(i => ({ productId: i.productId, quantity: i.quantity })),
+      items: selectedItems.map(i => ({
+        productId: i.productId,
+        quantity: i.quantity,
+        customPrice: i.unitPrice !== i.catalogPrice ? i.unitPrice : undefined,
+      })),
       paymentType,
       upfrontPaymentAmount: upfrontAmount,
       useWalletAmount: useWallet ? walletBalance : 0,
@@ -250,26 +255,64 @@ export default function SalesClient({ customers, products }: { customers: any[],
           {/* Cart Items */}
           <div className="mt-4 border border-[var(--border)] rounded-md overflow-hidden bg-[#111]">
             {selectedItems.map(item => (
-              <div key={item.productId} className="flex justify-between items-center p-3 border-b border-[var(--border)] last:border-0">
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">{item.name}</span>
-                  <span className="text-xs text-[#888]">${item.unitPrice.toFixed(2)} c/u</span>
+              <div key={item.productId} className="flex flex-col gap-2 p-3 border-b border-[var(--border)] last:border-0">
+                <div className="flex justify-between items-start">
+                  <span className="text-sm font-medium flex-1 mr-2">{item.name}</span>
+                  <Button variant="ghost" size="sm" className="text-red-500 h-6 w-6 p-0 shrink-0" onClick={() => setSelectedItems(selectedItems.filter(i => i.productId !== item.productId))}>×</Button>
                 </div>
-                <div className="flex items-center space-x-3">
-                  <Input 
-                    type="number" 
-                    min="1" 
-                    className="w-16 h-7 text-right" 
-                    value={item.quantity} 
-                    onChange={(e) => {
-                      const q = parseInt(e.target.value);
-                      if (q > 0) setSelectedItems(selectedItems.map(i => i.productId === item.productId ? { ...i, quantity: q } : i));
-                    }} 
-                  />
-                  <span className="font-bold text-[var(--accent)] w-16 text-right">
-                    ${(item.quantity * item.unitPrice).toFixed(2)}
-                  </span>
-                  <Button variant="ghost" size="sm" className="text-red-500 h-7 w-7 p-0" onClick={() => setSelectedItems(selectedItems.filter(i => i.productId !== item.productId))}>×</Button>
+                <div className="flex items-center gap-2">
+                  {/* Quantity */}
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[10px] text-[#555] uppercase tracking-wider">Cant.</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      className="w-16 h-7 text-right text-sm"
+                      value={item.quantity}
+                      onChange={(e) => {
+                        const q = parseInt(e.target.value);
+                        if (q > 0) setSelectedItems(selectedItems.map(i => i.productId === item.productId ? { ...i, quantity: q } : i));
+                      }}
+                    />
+                  </div>
+                  {/* Custom Price */}
+                  <div className="flex flex-col gap-0.5 flex-1">
+                    <label className="text-[10px] text-[#555] uppercase tracking-wider">
+                      Precio c/u
+                      {item.unitPrice !== item.catalogPrice && (
+                        <span className="ml-1 text-amber-400">(Cat: ${item.catalogPrice.toFixed(2)})</span>
+                      )}
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#666] text-sm">$</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className={`h-7 pl-5 text-sm ${
+                          item.unitPrice !== item.catalogPrice
+                            ? "border-amber-500/50 text-amber-300 focus-visible:ring-amber-500/30"
+                            : ""
+                        }`}
+                        value={item.unitPrice}
+                        onChange={(e) => {
+                          const p = parseFloat(e.target.value);
+                          if (!isNaN(p) && p >= 0) {
+                            setSelectedItems(selectedItems.map(i =>
+                              i.productId === item.productId ? { ...i, unitPrice: p } : i
+                            ));
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {/* Subtotal */}
+                  <div className="flex flex-col gap-0.5 text-right shrink-0">
+                    <label className="text-[10px] text-[#555] uppercase tracking-wider">Subtotal</label>
+                    <span className="font-bold text-[var(--accent)] h-7 flex items-center justify-end">
+                      ${(item.quantity * item.unitPrice).toFixed(2)}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
