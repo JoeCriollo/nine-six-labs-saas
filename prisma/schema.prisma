@@ -68,25 +68,28 @@ model Lot {
 }
 
 model Customer {
-  id        String   @id @default(cuid())
-  name      String
-  phone     String?
-  address   String?
-  sales     Sale[]
-  createdAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  name          String
+  phone         String?
+  address       String?
+  walletBalance Float    @default(0)
+  sales         Sale[]
+  createdAt     DateTime @default(now())
 }
 
 model Sale {
-  id          String     @id @default(cuid())
-  customerId  String
-  customer    Customer   @relation(fields: [customerId], references: [id])
-  totalAmount Float
-  paymentType String     // "FULL" or "CREDIT"
-  leadSource  String?
-  date        DateTime   @default(now())
-  dueDate     DateTime?  // Only for CREDIT
-  items       SaleItem[]
-  payments    Payment[]
+  id            String     @id @default(cuid())
+  customerId    String
+  customer      Customer   @relation(fields: [customerId], references: [id])
+  totalAmount   Float
+  walletUsed    Float      @default(0)
+  walletEarned  Float      @default(0)
+  paymentType   String     // "FULL" or "CREDIT"
+  leadSource    String?
+  date          DateTime   @default(now())
+  dueDate       DateTime?  // Only for CREDIT
+  items         SaleItem[]
+  payments      Payment[]
   receiptNumber Int @default(autoincrement())
 }
 

@@ -20,6 +20,7 @@ export default function SalesClient({ customers, products }: { customers: any[],
   const [upfrontPayment, setUpfrontPayment] = useState<string>("");
   const [leadSource, setLeadSource] = useState("");
   const [loading, setLoading] = useState(false);
+  const [useWallet, setUseWallet] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // ── Scanner state ────────────────────────────
@@ -106,7 +107,12 @@ export default function SalesClient({ customers, products }: { customers: any[],
       return;
     }
 
-    const upfrontAmount = parseFloat(upfrontPayment) || (paymentType === "FULL" ? totalAmount : 0);
+    const selectedCustomer = customers.find(c => c.id === customerId);
+    const walletBalance = selectedCustomer?.walletBalance || 0;
+    const walletUsed = useWallet ? Math.min(walletBalance, totalAmount) : 0;
+    const payableAmount = totalAmount - walletUsed;
+
+    const upfrontAmount = parseFloat(upfrontPayment) || (paymentType === "FULL" ? payableAmount : 0);
 
     setLoading(true);
     setMessage(null);
@@ -117,6 +123,7 @@ export default function SalesClient({ customers, products }: { customers: any[],
       items: selectedItems.map(i => ({ productId: i.productId, quantity: i.quantity })),
       paymentType,
       upfrontPaymentAmount: upfrontAmount,
+      useWalletAmount: useWallet ? walletBalance : 0,
       leadSource
     });
 
@@ -126,6 +133,7 @@ export default function SalesClient({ customers, products }: { customers: any[],
       setSelectedItems([]);
       setUpfrontPayment("");
       setCustomerId("");
+      setUseWallet(false);
       setNewCustomerName("");
       setNewCustomerPhone("");
       setNewCustomerAddress("");
@@ -278,9 +286,47 @@ export default function SalesClient({ customers, products }: { customers: any[],
           <CardTitle>Checkout</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex justify-between items-end border-b border-[var(--border)] pb-4">
-            <span className="text-lg text-[#888]">Total</span>
-            <span className="text-4xl font-bold text-[var(--positive)]">${totalAmount.toFixed(2)}</span>
+          <div className="flex flex-col gap-2 border-b border-[var(--border)] pb-4">
+            <div className="flex justify-between items-end">
+              <span className="text-lg text-[#888]">Subtotal</span>
+              <span className="text-xl font-medium text-[#ccc]">${totalAmount.toFixed(2)}</span>
+            </div>
+            
+            {customerId && customerId !== "NEW" && customers.find(c => c.id === customerId)?.walletBalance > 0 && (
+              <div className="flex items-center justify-between bg-[var(--accent)]/10 p-3 rounded-md border border-[var(--accent)]/30 mt-2">
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox" 
+                    id="use-wallet" 
+                    checked={useWallet} 
+                    onChange={(e) => setUseWallet(e.target.checked)}
+                    className="h-4 w-4 accent-[var(--accent)]"
+                  />
+                  <label htmlFor="use-wallet" className="text-sm font-medium text-[var(--accent)] cursor-pointer">
+                    Usar Monedero Virtual
+                  </label>
+                </div>
+                <span className="text-sm font-bold text-[var(--accent)]">
+                  Disp: ${customers.find(c => c.id === customerId)?.walletBalance.toFixed(2)}
+                </span>
+              </div>
+            )}
+            
+            {useWallet && customerId && customerId !== "NEW" && (
+              <div className="flex justify-between items-end">
+                <span className="text-sm text-[var(--accent)]">Descuento Monedero</span>
+                <span className="text-sm font-bold text-[var(--accent)]">
+                  -${Math.min(customers.find(c => c.id === customerId)?.walletBalance || 0, totalAmount).toFixed(2)}
+                </span>
+              </div>
+            )}
+
+            <div className="flex justify-between items-end pt-2">
+              <span className="text-xl text-[#888] font-bold">Total a Pagar</span>
+              <span className="text-4xl font-bold text-[var(--positive)]">
+                ${(totalAmount - (useWallet ? Math.min(customers.find(c => c.id === customerId)?.walletBalance || 0, totalAmount) : 0)).toFixed(2)}
+              </span>
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -309,7 +355,7 @@ export default function SalesClient({ customers, products }: { customers: any[],
                 <label className="text-sm text-[#888]">Pago Inicial (Anticipo Mínimo 50%)</label>
                 <Input 
                   type="number" 
-                  placeholder={`Mínimo $${(totalAmount * 0.5).toFixed(2)}`}
+                  placeholder={`Mínimo $${((totalAmount - (useWallet ? Math.min(customers.find(c => c.id === customerId)?.walletBalance || 0, totalAmount) : 0)) * 0.5).toFixed(2)}`}
                   value={upfrontPayment}
                   onChange={(e) => setUpfrontPayment(e.target.value)}
                 />

@@ -43,6 +43,14 @@ export default function SalesHistoryClient({ sales }: { sales: any[] }) {
     } else {
       msg += `(Pagado en su totalidad ✅)\n`;
     }
+
+    if (s.walletEarned > 0) {
+      msg += `\n🎁 *Tu Recompensa:*\n`;
+      msg += `Ganaste *$${s.walletEarned.toFixed(2)}* en esta compra.\n`;
+      if (s.customer.walletBalance) {
+        msg += `Tienes *$${s.customer.walletBalance.toFixed(2)}* ahorrados para tu próximo pedido! 🤩\n`;
+      }
+    }
     
     msg += `\n📄 Adjunto te enviamos tu recibo digital. ¡A darle con todo en tu entrenamiento! 💪🔥`;
     

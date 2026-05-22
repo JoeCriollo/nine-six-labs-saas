@@ -30,6 +30,7 @@ export async function getCustomers() {
         name: c.name,
         phone: c.phone,
         address: c.address,
+        walletBalance: c.walletBalance,
         createdAt: c.createdAt,
         purchaseCount: c.sales.length,
         totalSpent,

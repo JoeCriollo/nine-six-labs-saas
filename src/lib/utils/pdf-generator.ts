@@ -81,34 +81,78 @@ export async function generateReceiptPDF(sale: any) {
   // Totals
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
-  doc.text("TOTAL:", 45, finalY);
-  doc.text(`$${sale.totalAmount.toFixed(2)}`, 70, finalY, { align: "right" });
+  
+  if (sale.walletUsed > 0) {
+    doc.text("SUBTOTAL:", 45, finalY);
+    doc.text(`$${sale.totalAmount.toFixed(2)}`, 70, finalY, { align: "right" });
+    
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 150, 0); // Green for discount
+    doc.text("Monedero Virtual:", 35, finalY + 5);
+    doc.text(`-$${sale.walletUsed.toFixed(2)}`, 70, finalY + 5, { align: "right" });
+    
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "bold");
+    doc.text("TOTAL PAGO:", 40, finalY + 12);
+    doc.text(`$${(sale.totalAmount - sale.walletUsed).toFixed(2)}`, 70, finalY + 12, { align: "right" });
+  } else {
+    doc.text("TOTAL:", 45, finalY);
+    doc.text(`$${sale.totalAmount.toFixed(2)}`, 70, finalY, { align: "right" });
+  }
 
+  const offsetTotals = sale.walletUsed > 0 ? 12 : 0;
   const totalPaid = sale.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0;
-  const remaining = sale.totalAmount - totalPaid;
+  const remaining = (sale.totalAmount - sale.walletUsed) - totalPaid;
 
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
-  doc.text("PAGADO:", 45, finalY + 5);
-  doc.text(`$${totalPaid.toFixed(2)}`, 70, finalY + 5, { align: "right" });
+  doc.text("PAGADO:", 45, finalY + offsetTotals + 5);
+  doc.text(`$${totalPaid.toFixed(2)}`, 70, finalY + offsetTotals + 5, { align: "right" });
+
+  let endY = finalY + offsetTotals + 5;
 
   if (remaining > 0.01) {
     doc.setTextColor(255, 49, 49); // Red
     doc.setFont("helvetica", "bold");
-    doc.text("PENDIENTE:", 45, finalY + 10);
-    doc.text(`$${remaining.toFixed(2)}`, 70, finalY + 10, { align: "right" });
+    doc.text("PENDIENTE:", 45, endY + 5);
+    doc.text(`$${remaining.toFixed(2)}`, 70, endY + 5, { align: "right" });
     
     if (sale.dueDate) {
       doc.setFontSize(7);
-      doc.text(`Vence: ${new Date(sale.dueDate).toLocaleDateString()}`, 70, finalY + 14, { align: "right" });
+      doc.text(`Vence: ${new Date(sale.dueDate).toLocaleDateString()}`, 70, endY + 9, { align: "right" });
+      endY += 4;
     }
+    endY += 5;
+  }
+  
+  // Rewards Block
+  if (sale.walletEarned > 0) {
+    endY += 5;
+    doc.setTextColor(0, 0, 0);
+    doc.setDrawColor(200, 200, 200);
+    doc.setFillColor(245, 245, 245);
+    doc.roundedRect(10, endY, 60, 16, 2, 2, "FD");
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.text("RECOMPENSA ACUMULADA", 40, endY + 5, { align: "center" });
+    
+    doc.setFont("helvetica", "normal");
+    doc.text(`Ganaste hoy: $${sale.walletEarned.toFixed(2)}`, 40, endY + 9, { align: "center" });
+    
+    if (sale.customer?.walletBalance !== undefined) {
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 150, 0);
+      doc.text(`Saldo Total Disponible: $${sale.customer.walletBalance.toFixed(2)}`, 40, endY + 13, { align: "center" });
+    }
+    endY += 16;
   }
 
   // Footer
   doc.setTextColor(150, 150, 150);
   doc.setFontSize(7);
   doc.setFont("helvetica", "italic");
-  doc.text("¡Gracias por confiar en Nine Six Labs!", 40, finalY + 25, { align: "center" });
+  doc.text("¡Gracias por confiar en Nine Six Labs!", 40, endY + 10, { align: "center" });
 
   // Save/Download
   doc.save(`Recibo_NineSix_${sale.id.slice(-6)}.pdf`);

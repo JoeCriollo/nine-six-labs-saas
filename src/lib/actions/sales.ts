@@ -19,6 +19,7 @@ export type ProcessSaleInput = {
   paymentType: 'FULL' | 'CREDIT';
   upfrontPaymentAmount: number;
   leadSource?: string;
+  useWalletAmount?: number;
 };
 
 export async function processSale(data: ProcessSaleInput) {
@@ -89,16 +90,41 @@ export async function processSale(data: ProcessSaleInput) {
         }
       }
 
+      // Wallet Logic
+      let walletUsed = 0;
+      let walletEarned = 0;
+      if (data.useWalletAmount && data.useWalletAmount > 0) {
+        const customerRecord = await tx.customer.findUnique({ where: { id: finalCustomerId } });
+        if (customerRecord && customerRecord.walletBalance > 0) {
+           walletUsed = Math.min(data.useWalletAmount, customerRecord.walletBalance, totalAmount);
+        }
+      }
+      
+      const finalPayableAmount = totalAmount - walletUsed;
+      walletEarned = finalPayableAmount * 0.03; // 3% Cashback sobre lo pagado con dinero real
+
+      // Update Customer Wallet
+      if (walletUsed > 0 || walletEarned > 0) {
+        await tx.customer.update({
+          where: { id: finalCustomerId },
+          data: {
+            walletBalance: {
+              increment: walletEarned - walletUsed
+            }
+          }
+        });
+      }
+
       // 2. Validate Payment
       if (data.paymentType === 'CREDIT') {
-        const minimumUpfront = totalAmount * 0.5;
+        const minimumUpfront = finalPayableAmount * 0.5;
         if (data.upfrontPaymentAmount < minimumUpfront) {
           throw new Error(`Venta a crédito requiere mínimo 50% de anticipo ($${minimumUpfront.toFixed(2)})`);
         }
       } else {
-        // FULL payment means upfront must match total
-        if (Math.abs(data.upfrontPaymentAmount - totalAmount) > 0.01) {
-          throw new Error('Pago completo no coincide con el total de la venta');
+        // FULL payment means upfront must match final payable
+        if (Math.abs(data.upfrontPaymentAmount - finalPayableAmount) > 0.01) {
+          throw new Error('Pago completo no coincide con el total a pagar después del monedero');
         }
       }
 
@@ -111,6 +137,8 @@ export async function processSale(data: ProcessSaleInput) {
         data: {
           customerId: finalCustomerId,
           totalAmount,
+          walletUsed,
+          walletEarned,
           paymentType: data.paymentType,
           leadSource: data.leadSource,
           dueDate,
