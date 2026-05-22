@@ -163,6 +163,7 @@ export async function getSales() {
       orderBy: { date: 'desc' },
       include: {
         customer: true,
+        payments: true,
         items: {
           include: {
             lot: {

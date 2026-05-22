@@ -25,7 +25,28 @@ export default function SalesHistoryClient({ sales }: { sales: any[] }) {
       return;
     }
     const phone = s.customer.phone.replace(/\D/g, "");
-    const text = encodeURIComponent(`¡Hola ${s.customer.name}! Gracias por tu compra en Nine Six Labs. Adjunto te enviamos tu recibo digital por un total de $${s.totalAmount.toFixed(2)}.`);
+    const totalPaid = s.payments?.reduce((acc: number, p: any) => acc + p.amount, 0) || 0;
+    const remaining = s.totalAmount - totalPaid;
+    
+    let msg = `🎉 ¡Felicidades por tu nueva compra, *${s.customer.name.split(' ')[0]}*! 🚀\n`;
+    msg += `Gracias por confiar en Nine Six Labs para alcanzar tus metas.\n\n`;
+    msg += `🛒 *Tu pedido:*\n`;
+    s.items.forEach((i: any) => {
+      msg += `▫️ ${i.quantity}x ${i.lot.product.brand} — ${i.lot.product.name}\n`;
+    });
+    msg += `\n💰 *Resumen:*\n`;
+    msg += `Total de la compra: *$${s.totalAmount.toFixed(2)}*\n`;
+    
+    if (remaining > 0.01) {
+      msg += `Monto abonado: *$${totalPaid.toFixed(2)}*\n`;
+      msg += `⚠️ Saldo Pendiente: *$${remaining.toFixed(2)}*\n`;
+    } else {
+      msg += `(Pagado en su totalidad ✅)\n`;
+    }
+    
+    msg += `\n📄 Adjunto te enviamos tu recibo digital. ¡A darle con todo en tu entrenamiento! 💪🔥`;
+    
+    const text = encodeURIComponent(msg);
     window.open(`https://wa.me/${phone}?text=${text}`, "_blank");
   };
 

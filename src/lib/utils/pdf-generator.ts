@@ -1,32 +1,50 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-export function generateReceiptPDF(sale: any) {
+const getBase64Image = (url: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = (e) => reject(e);
+    img.src = url;
+  });
+};
+
+export async function generateReceiptPDF(sale: any) {
   const doc = new jsPDF({
     unit: 'mm',
     format: [80, 150] // Receipt size (standard thermal printer width)
   });
 
-  // Colors
-  const accentColor = [50, 255, 0]; // Neon Green
-  const darkColor = [20, 20, 20];
+  // Header / Logo
+  try {
+    const logoBase64 = await getBase64Image('/bg-login.png');
+    // Calculate aspect ratio. Width = 40mm.
+    doc.addImage(logoBase64, 'PNG', 15, 2, 50, 25); // Adjusted coordinates for logo
+  } catch (e) {
+    console.error("Failed to load logo", e);
+    doc.setFillColor(0, 0, 0);
+    doc.rect(0, 0, 80, 25, 'F');
+    doc.setTextColor(50, 255, 0);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("NINE SIX LABS", 40, 15, { align: "center" });
+  }
 
-  // Header
-  doc.setFillColor(0, 0, 0);
-  doc.rect(0, 0, 80, 25, 'F');
-  
-  doc.setTextColor(50, 255, 0);
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.text("NINE SIX LABS", 40, 12, { align: "center" });
-  
-  doc.setFontSize(8);
-  doc.text("COMMAND CENTER", 40, 18, { align: "center" });
+  const receiptNum = sale.receiptNumber ? String(sale.receiptNumber).padStart(5, '0') : sale.id.slice(-5).toUpperCase();
 
   // Sale Info
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(10);
-  doc.text(`RECIBO: #${sale.id.slice(-6).toUpperCase()}`, 10, 35);
+  doc.text(`RECIBO: #${receiptNum}`, 10, 35);
   doc.setFontSize(8);
   doc.text(`FECHA: ${new Date(sale.date).toLocaleString()}`, 10, 40);
   doc.text(`CLIENTE: ${sale.customer.name}`, 10, 45);

@@ -86,6 +86,7 @@ model Sale {
   dueDate     DateTime?  // Only for CREDIT
   items       SaleItem[]
   payments    Payment[]
+  receiptNumber Int @default(autoincrement())
 }
 
 model SaleItem {
