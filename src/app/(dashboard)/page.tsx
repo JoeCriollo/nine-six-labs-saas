@@ -117,7 +117,7 @@ export default async function Dashboard({
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold text-[var(--positive)]">
-              ${totalSales.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              ${totalSales.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <GrowthBadge growth={growthSales} />
             <p className="text-[10px] text-[#555] mt-1">Facturación del período</p>
@@ -134,7 +134,7 @@ export default async function Dashboard({
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold text-[#ffaa00]">
-              ${totalCogs.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              ${totalCogs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <p className="text-[10px] text-[#555] mt-1">Inversión en productos vendidos</p>
           </CardContent>
@@ -150,7 +150,7 @@ export default async function Dashboard({
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold text-[var(--negative)]">
-              ${totalExpenses.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              ${totalExpenses.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <p className="text-[10px] text-[#555] mt-1">Marketing, fijos y varios</p>
           </CardContent>
@@ -181,7 +181,7 @@ export default async function Dashboard({
             <div
               className={`text-xl font-bold ${isProfitNegative ? "text-[var(--negative)]" : "text-[var(--positive)]"}`}
             >
-              ${netProfit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              ${netProfit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <GrowthBadge growth={growthProfit} />
             <p className="text-[10px] text-[#555] mt-1">Ganancia real (Bolsillo)</p>
@@ -198,7 +198,7 @@ export default async function Dashboard({
           </CardHeader>
           <CardContent>
             <div className="text-xl font-bold text-[#00E5FF]">
-              ${accountsReceivableTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              ${accountsReceivableTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <p className="text-[10px] text-[#555] mt-1">Capital pendiente de cobro</p>
           </CardContent>
@@ -216,7 +216,7 @@ export default async function Dashboard({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-[#00E5FF]">
-              ${inventoryValue.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              ${inventoryValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <p className="text-[10px] text-[#555] mt-1">
               Capital invertido actualmente en bodega (precio de costo)
@@ -233,7 +233,7 @@ export default async function Dashboard({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-[var(--positive)]">
-              ${projectedProfit.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              ${projectedProfit.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <p className="text-[10px] text-[#555] mt-1">
               Si vendes todo el inventario disponible al precio actual
