@@ -14,40 +14,70 @@ export function ScannerModal({ onScan, onClose }: ScannerModalProps) {
   const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
-    let html5QrCode: any;
+    let html5QrCode: any = null;
+    let isComponentMounted = true;
 
     const startScanner = async () => {
       try {
         const { Html5Qrcode } = await import("html5-qrcode");
+        
+        // Si el componente se desmontó mientras cargaba el import, no continuar
+        if (!isComponentMounted) return;
+
         html5QrCode = new Html5Qrcode("qr-reader");
         scannerRef.current = html5QrCode;
 
         await html5QrCode.start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 260, height: 260 } },
+          { 
+            fps: 10, 
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0
+          },
           (decodedText: string) => {
-            // Detener el scanner inmediatamente al detectar un código
-            html5QrCode.stop().catch(() => {});
+            // Callback al detectar un código
+            if (html5QrCode && html5QrCode.isScanning) {
+              html5QrCode.stop().then(() => {
+                html5QrCode.clear();
+              }).catch(() => {});
+            }
             onScan(decodedText.trim());
           },
           () => {} // Ignorar errores de frame silenciosamente
         );
 
-        setScanning(true);
+        if (isComponentMounted) {
+          setScanning(true);
+        }
       } catch (err: any) {
-        setError(
-          "No se pudo acceder a la cámara. Verifica los permisos del navegador."
-        );
+        if (isComponentMounted) {
+          setError("No se pudo acceder a la cámara. Verifica los permisos del navegador.");
+        }
       }
     };
 
     startScanner();
 
     return () => {
-      scannerRef.current
-        ?.stop()
-        .catch(() => {})
-        .finally(() => scannerRef.current?.clear());
+      isComponentMounted = false;
+      if (scannerRef.current) {
+        try {
+          // Intentar detener; manejar tanto promesa exitosa como rechazada/error síncrono
+          const stopPromise = scannerRef.current.stop();
+          if (stopPromise && stopPromise.then) {
+            stopPromise.then(() => {
+              scannerRef.current?.clear();
+            }).catch(() => {
+              scannerRef.current?.clear();
+            });
+          } else {
+            scannerRef.current.clear();
+          }
+        } catch (e) {
+          // Capturar error si stop() falla síncronamente
+          try { scannerRef.current.clear(); } catch(e2) {}
+        }
+      }
     };
   }, [onScan]);
 
