@@ -33,6 +33,7 @@ export async function updateProduct(id: string, data: {
   category: string;
   flavor: string;
   size: string;
+  servings?: number | null;
 }) {
   try {
     if (!data.brand || !data.name) throw new Error('Marca y nombre son requeridos');

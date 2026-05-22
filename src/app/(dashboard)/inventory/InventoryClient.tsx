@@ -53,11 +53,14 @@ export default function InventoryClient({ lots }: { lots: any[] }) {
     }
   };
 
-  const getExpirationStatus = (expDate: Date) => {
+  const getExpirationStatus = (expDate: Date, servings?: number | null) => {
     const days = differenceInDays(new Date(expDate), new Date());
-    if (days < 90)  return { color: 'text-[var(--negative)]',  label: 'Crítico' };
-    if (days <= 150) return { color: 'text-[#ffaa00]',          label: 'Atención' };
-    return              { color: 'text-[var(--positive)]',      label: 'Óptimo' };
+    const gracePeriod = 60; // Días mínimos de margen en estantería
+    const buffer = (servings || 30) + gracePeriod;
+    
+    if (days < buffer)  return { color: 'text-red-500',  label: 'Crítico' };
+    if (days <= buffer + 60) return { color: 'text-yellow-500', label: 'Atención' };
+    return              { color: 'text-emerald-500',      label: 'Óptimo' };
   };
 
   const handleDelete = async (lotId: string) => {
@@ -156,7 +159,7 @@ export default function InventoryClient({ lots }: { lots: any[] }) {
             </TableRow>
           ) : (
             lots.map((lot) => {
-              const status = getExpirationStatus(lot.expirationDate);
+              const status = getExpirationStatus(lot.expirationDate, lot.product?.servings);
               const effectivePrice = editingPriceId === lot.id
                 ? (parseFloat(editPrice) || lot.priceSale)
                 : lot.priceSale;

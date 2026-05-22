@@ -45,6 +45,7 @@ interface NewProductForm {
   flavor: string;
   weight: string; // Ej: 300g, 4 lbs, 120
   format: string; // Ej: Servicios, Cápsulas, Tableta
+  servings: string;
   category: string;
   quantity: string;
   costUsa: string;
@@ -120,6 +121,7 @@ export default function ImportsPage() {
         flavor: "",
         weight: "",
         format: "",
+        servings: "",
         category: "Proteínas",
         quantity: "",
         costUsa: "",
@@ -189,6 +191,7 @@ export default function ImportsPage() {
         name: productForm.name.trim(),
         flavor: productForm.flavor.trim(),
         size: combinedSize,
+        servings: productForm.servings ? parseInt(productForm.servings) : null,
         category: productForm.category,
         quantity: qty,
         costUsa: cost,
@@ -389,9 +392,15 @@ export default function ImportsPage() {
                         className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#00E5FF]" />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-medium text-[#666]">Formato / Servicios</label>
-                      <input id="new-format" type="text" placeholder="Ej: 60 Serv, Cápsulas..." value={productForm.format}
+                      <label className="text-xs font-medium text-[#666]">Formato (Gramos, Lbs, Caps)</label>
+                      <input id="new-format" type="text" placeholder="Ej: Lbs, Cápsulas..." value={productForm.format}
                         onChange={(e) => setProductForm((f) => f && { ...f, format: e.target.value })}
+                        className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#00E5FF]" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-[#666]">Servicios (Opcional)</label>
+                      <input id="new-servings" type="number" min="1" placeholder="Ej: 30, 60, 100" value={productForm.servings}
+                        onChange={(e) => setProductForm((f) => f && { ...f, servings: e.target.value })}
                         className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#00E5FF]" />
                     </div>
                     <div className="flex flex-col gap-1.5 sm:col-span-2">

@@ -21,6 +21,7 @@ export interface NewProductImportItemDTO {
   flavor: string;
   size: string;
   category: string;
+  servings?: number | null;
   quantity: number;
   costUsa: number;
   expirationDate: string;
@@ -126,6 +127,7 @@ export async function processImport(
           flavor: dto.flavor,
           size: dto.size,
           category: dto.category || 'General',
+          servings: dto.servings,
         },
       });
 

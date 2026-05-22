@@ -16,6 +16,7 @@ model Product {
   category    String   @default("General")
   flavor      String
   size        String
+  servings    Int?
   lots        Lot[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

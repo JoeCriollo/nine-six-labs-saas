@@ -9,7 +9,7 @@ import { Pencil, Check, X, Trash2, Package } from "lucide-react";
 
 export default function ProductsClient({ products }: { products: any[] }) {
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editData, setEditData] = useState({ brand: "", name: "", category: "", flavor: "", size: "" });
+  const [editData, setEditData] = useState<{ brand: string; name: string; category: string; flavor: string; size: string; servings: string | number }>({ brand: "", name: "", category: "", flavor: "", size: "", servings: "" });
   const [savingId, setSavingId] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("TODOS");
 
@@ -30,12 +30,13 @@ export default function ProductsClient({ products }: { products: any[] }) {
 
   const startEdit = (p: any) => {
     setEditingId(p.id);
-    setEditData({ brand: p.brand, name: p.name, category: p.category || "Otros", flavor: p.flavor, size: p.size });
+    setEditData({ brand: p.brand, name: p.name, category: p.category || "Otros", flavor: p.flavor, size: p.size, servings: p.servings || "" });
   };
 
   const saveEdit = async (id: string) => {
     setSavingId(id);
-    const res = await updateProduct(id, editData);
+    const dataToSave = { ...editData, servings: editData.servings ? Number(editData.servings) : null };
+    const res = await updateProduct(id, dataToSave);
     if (!res.success) alert(res.error || "Error al guardar");
     setSavingId(null);
     setEditingId(null);
@@ -83,6 +84,7 @@ export default function ProductsClient({ products }: { products: any[] }) {
               <TableHead>Nombre</TableHead>
               <TableHead>Sabor</TableHead>
               <TableHead>Tamaño</TableHead>
+              <TableHead>Servicios</TableHead>
               <TableHead className="text-right">Lotes Activos</TableHead>
               <TableHead className="text-right">Stock Total</TableHead>
               <TableHead className="text-center">Acciones</TableHead>
@@ -137,6 +139,11 @@ export default function ProductsClient({ products }: { products: any[] }) {
                       {isEditing ? (
                         <Input value={editData.size} onChange={(e) => setEditData({ ...editData, size: e.target.value })} className="h-7 text-sm" />
                       ) : <span className="text-[#888]">{p.size}</span>}
+                    </TableCell>
+                    <TableCell className="min-w-[80px]">
+                      {isEditing ? (
+                        <Input type="number" value={editData.servings} onChange={(e) => setEditData({ ...editData, servings: e.target.value })} className="h-7 text-sm" />
+                      ) : <span className="text-[#888]">{p.servings || "—"}</span>}
                     </TableCell>
                     <TableCell className="text-right font-bold text-[var(--accent)]">{p.activeLots}</TableCell>
                     <TableCell className="text-right font-bold">{p.totalStock}</TableCell>
