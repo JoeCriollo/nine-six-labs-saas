@@ -4,7 +4,7 @@ import { db } from '../db';
 import { revalidatePath } from 'next/cache';
 import { findBestDimensions } from '../utils/product-matching';
 
-// DTO tipado que alimenta la Server Action desde el carrito de importación
+// DTO para ítems con producto ya existente
 export interface ImportItemDTO {
   productId: string;
   quantity: number;
@@ -13,9 +13,23 @@ export interface ImportItemDTO {
   marginPercent: number;
 }
 
+// DTO para ítems cuyo producto se crea en el mismo proceso
+export interface NewProductImportItemDTO {
+  sku: string;
+  brand: string;
+  name: string;
+  flavor: string;
+  size: string;
+  category: string;
+  quantity: number;
+  costUsa: number;
+  expirationDate: string;
+  marginPercent: number;
+}
+
 /**
  * Busca un producto por SKU para el modal de escaneo QR.
- * Retorna el producto si existe, o null si no se encuentra.
+ * Retorna el producto si existe, o { notFound: true } si no existe.
  */
 export async function getProductBySku(sku: string) {
   try {
@@ -29,12 +43,12 @@ export async function getProductBySku(sku: string) {
       },
     });
 
-    if (!product) return { success: false, data: null };
+    if (!product) return { success: true, notFound: true, data: null };
 
     const totalStock = product.lots.reduce((acc, l) => acc + l.currentQuantity, 0);
-    return { success: true, data: { ...product, totalStock } };
+    return { success: true, notFound: false, data: { ...product, totalStock } };
   } catch {
-    return { success: false, data: null };
+    return { success: false, notFound: false, data: null };
   }
 }
 
@@ -42,14 +56,16 @@ export async function getProductBySku(sku: string) {
  * Procesa un cargamento de importación a partir del carrito dinámico.
  * Recibe un array tipado de ImportItemDTO, el flete total y un número de lote personalizado.
  * La lógica de prorrateo volumétrico (Landed Cost) queda INTACTA.
+ * Los productos nuevos (newItems) se crean en la misma transacción atómica.
  */
 export async function processImport(
   items: ImportItemDTO[],
+  newItems: NewProductImportItemDTO[],
   freightTotalUsd: number,
   customLoteNumber: string
 ) {
   try {
-    if (!items || items.length === 0) {
+    if ((!items || items.length === 0) && (!newItems || newItems.length === 0)) {
       throw new Error('El carrito está vacío. Agrega al menos un producto antes de procesar.');
     }
 
@@ -57,7 +73,7 @@ export async function processImport(
       throw new Error('El flete total debe ser mayor a $0.');
     }
 
-    // ------- Paso 1: Resolver productos y calcular volúmenes --------
+    // ------- Paso 1: Resolver productos existentes y calcular volúmenes --------
     let totalVolumeSum = 0;
     const itemsResolved: {
       productId: string;
@@ -86,6 +102,39 @@ export async function processImport(
 
       itemsResolved.push({
         productId: dto.productId,
+        qty: dto.quantity,
+        costUsaUnit: dto.costUsa,
+        length: bestDim.length,
+        width: bestDim.width,
+        height: bestDim.height,
+        itemVolume,
+        margin: dto.marginPercent,
+        expiry: dto.expirationDate,
+      });
+    }
+
+    // ------- Paso 1b: Crear productos nuevos y añadirlos al listado resuelto -------
+    for (const dto of newItems) {
+      // Crear o recuperar el producto (upsert para evitar duplicados por carrera)
+      const product = await db.product.upsert({
+        where: { sku: dto.sku },
+        update: {}, // Si ya existe por SKU, no sobreescribir datos
+        create: {
+          sku: dto.sku,
+          brand: dto.brand,
+          name: dto.name,
+          flavor: dto.flavor,
+          size: dto.size,
+          category: dto.category || 'General',
+        },
+      });
+
+      const bestDim = findBestDimensions(product.brand, product.name, product.size);
+      const itemVolume = bestDim.length * bestDim.width * bestDim.height;
+      totalVolumeSum += itemVolume * dto.quantity;
+
+      itemsResolved.push({
+        productId: product.id,
         qty: dto.quantity,
         costUsaUnit: dto.costUsa,
         length: bestDim.length,

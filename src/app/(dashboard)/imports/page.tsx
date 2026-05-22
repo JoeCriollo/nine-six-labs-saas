@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { processImport, getProductBySku, ImportItemDTO } from "@/lib/actions/imports";
+import { processImport, getProductBySku, ImportItemDTO, NewProductImportItemDTO } from "@/lib/actions/imports";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScannerModal } from "@/components/ui/scanner-modal";
@@ -9,30 +9,51 @@ import { ScannerModal } from "@/components/ui/scanner-modal";
 // ──────────────────────────────────────────────
 // Tipos internos del carrito
 // ──────────────────────────────────────────────
-interface CartItem extends ImportItemDTO {
-  _cartId: string; // ID único solo en cliente para poder eliminar filas
+interface ExistingCartItem extends ImportItemDTO {
+  _cartId: string;
+  _isNew: false;
   productName: string;
   productBrand: string;
+  productFlavor: string;
   productSize: string;
 }
 
-interface ProductFormState {
+interface NewCartItem extends NewProductImportItemDTO {
+  _cartId: string;
+  _isNew: true;
+}
+
+type CartItem = ExistingCartItem | NewCartItem;
+
+// Formulario para producto ya existente
+interface ExistingProductForm {
+  mode: "existing";
   productId: string;
-  productLabel: string; // "Brand · Name · Size"
+  productLabel: string;
   quantity: string;
   costUsa: string;
   expirationDate: string;
   marginPercent: string;
 }
 
-const EMPTY_FORM: ProductFormState = {
-  productId: "",
-  productLabel: "",
-  quantity: "",
-  costUsa: "",
-  expirationDate: "",
-  marginPercent: "15",
-};
+// Formulario para producto nuevo (escaneado por primera vez)
+interface NewProductForm {
+  mode: "new";
+  sku: string;
+  brand: string;
+  name: string;
+  flavor: string;
+  size: string;
+  category: string;
+  quantity: string;
+  costUsa: string;
+  expirationDate: string;
+  marginPercent: string;
+}
+
+type ProductFormState = ExistingProductForm | NewProductForm;
+
+const CATEGORIES = ["Proteínas", "Pre-Entrenos", "Aminoácidos", "Vitaminas", "Quemadores", "Carbohidratos", "Recuperación", "General"];
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -45,32 +66,27 @@ function fmt(n: number) {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function cartItemLabel(item: CartItem): string {
+  if (item._isNew) return `[NUEVO] ${item.brand} ${item.name} · ${item.flavor} · ${item.size}`;
+  return `${item.productBrand} ${item.productName} · ${item.productFlavor} · ${item.productSize}`;
+}
+
 // ──────────────────────────────────────────────
 // Componente principal
 // ──────────────────────────────────────────────
 export default function ImportsPage() {
-  // Estado global del cargamento
   const [freightTotal, setFreightTotal] = useState("");
   const [loteNumber, setLoteNumber] = useState("");
-
-  // Carrito de ítems
   const [cart, setCart] = useState<CartItem[]>([]);
-
-  // Escáner
   const [showScanner, setShowScanner] = useState(false);
-
-  // Formulario rápido de producto (se muestra tras el scan)
   const [productForm, setProductForm] = useState<ProductFormState | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
-
-  // Procesamiento final
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // ── Handlers ─────────────────────────────────
 
-  // Llamado por ScannerModal cuando detecta un código
   const handleScan = useCallback(async (sku: string) => {
     setShowScanner(false);
     setLookupError(null);
@@ -78,18 +94,37 @@ export default function ImportsPage() {
     setProductForm(null);
 
     const res = await getProductBySku(sku);
-
     setLookupLoading(false);
 
-    if (!res.success || !res.data) {
-      setLookupError(`SKU "${sku}" no encontrado en la base de datos. Verifica el código o agrega el producto primero.`);
+    if (!res.success) {
+      setLookupError("Error de conexión al buscar el producto. Inténtalo de nuevo.");
       return;
     }
 
-    const p = res.data;
+    if (res.notFound) {
+      // Producto nuevo: mostrar formulario expandido de creación
+      setProductForm({
+        mode: "new",
+        sku,
+        brand: "",
+        name: "",
+        flavor: "",
+        size: "",
+        category: "General",
+        quantity: "",
+        costUsa: "",
+        expirationDate: "",
+        marginPercent: "15",
+      });
+      return;
+    }
+
+    // Producto existente: formulario rápido
+    const p = res.data!;
     setProductForm({
+      mode: "existing",
       productId: p.id,
-      productLabel: `${p.brand} · ${p.name} · ${p.size}`,
+      productLabel: `${p.brand} · ${p.name} · ${p.flavor} · ${p.size}`,
       quantity: "",
       costUsa: "",
       expirationDate: "",
@@ -110,21 +145,45 @@ export default function ImportsPage() {
     if (!productForm.expirationDate) return setLookupError("La fecha de expiración es requerida.");
     if (isNaN(margin) || margin < 0) return setLookupError("El margen debe ser un número positivo.");
 
-    const [brand, name, size] = productForm.productLabel.split(" · ");
+    if (productForm.mode === "existing") {
+      const newItem: ExistingCartItem = {
+        _cartId: uid(),
+        _isNew: false,
+        productId: productForm.productId,
+        productName: productForm.productLabel.split(" · ")[1] ?? "",
+        productBrand: productForm.productLabel.split(" · ")[0] ?? "",
+        productFlavor: productForm.productLabel.split(" · ")[2] ?? "",
+        productSize: productForm.productLabel.split(" · ")[3] ?? "",
+        quantity: qty,
+        costUsa: cost,
+        expirationDate: new Date(productForm.expirationDate).toISOString(),
+        marginPercent: margin,
+      };
+      setCart((prev) => [...prev, newItem]);
+    } else {
+      // Producto nuevo
+      if (!productForm.brand.trim()) return setLookupError("La marca es requerida.");
+      if (!productForm.name.trim()) return setLookupError("El nombre del producto es requerido.");
+      if (!productForm.flavor.trim()) return setLookupError("El sabor es requerido.");
+      if (!productForm.size.trim()) return setLookupError("El tamaño/presentación es requerido.");
 
-    const newItem: CartItem = {
-      _cartId: uid(),
-      productId: productForm.productId,
-      productName: name ?? "",
-      productBrand: brand ?? "",
-      productSize: size ?? "",
-      quantity: qty,
-      costUsa: cost,
-      expirationDate: new Date(productForm.expirationDate).toISOString(),
-      marginPercent: margin,
-    };
+      const newItem: NewCartItem = {
+        _cartId: uid(),
+        _isNew: true,
+        sku: productForm.sku,
+        brand: productForm.brand.trim(),
+        name: productForm.name.trim(),
+        flavor: productForm.flavor.trim(),
+        size: productForm.size.trim(),
+        category: productForm.category,
+        quantity: qty,
+        costUsa: cost,
+        expirationDate: new Date(productForm.expirationDate).toISOString(),
+        marginPercent: margin,
+      };
+      setCart((prev) => [...prev, newItem]);
+    }
 
-    setCart((prev) => [...prev, newItem]);
     setProductForm(null);
     setLookupError(null);
   };
@@ -146,17 +205,23 @@ export default function ImportsPage() {
     setProcessing(true);
     setResult(null);
 
-    const dtos: ImportItemDTO[] = cart.map(({ _cartId, productName, productBrand, productSize, ...dto }) => dto);
+    // Separar ítems existentes de ítems nuevos
+    const existingDtos: ImportItemDTO[] = cart
+      .filter((i): i is ExistingCartItem => !i._isNew)
+      .map(({ _cartId, _isNew, productName, productBrand, productFlavor, productSize, ...dto }) => dto);
 
-    const res = await processImport(dtos, freight, loteNumber);
+    const newDtos: NewProductImportItemDTO[] = cart
+      .filter((i): i is NewCartItem => i._isNew)
+      .map(({ _cartId, _isNew, ...dto }) => dto);
 
+    const res = await processImport(existingDtos, newDtos, freight, loteNumber);
     setProcessing(false);
 
     if (res.success) {
       setCart([]);
       setFreightTotal("");
       setLoteNumber("");
-      setResult({ success: true, message: `✅ Cargamento procesado con éxito. Se crearon ${dtos.length} lote(s) en el inventario.` });
+      setResult({ success: true, message: `✅ Cargamento procesado. ${cart.length} lote(s) creados. ${newDtos.length > 0 ? `${newDtos.length} producto(s) nuevo(s) creados en el catálogo.` : ""}` });
     } else {
       setResult({ success: false, message: res.error ?? "Error desconocido al procesar el cargamento." });
     }
@@ -164,10 +229,6 @@ export default function ImportsPage() {
 
   // ── Cálculos de previsualización ─────────────
   const freight = parseFloat(freightTotal) || 0;
-  const totalVolume = cart.reduce((acc, item) => {
-    // Estimación cliente-side para preview (el cálculo real lo hace el backend con product-matching)
-    return acc + item.quantity;
-  }, 0);
 
   // ──────────────────────────────────────────────
   // Render
@@ -270,89 +331,93 @@ export default function ImportsPage() {
             </div>
           )}
 
-          {/* Formulario rápido post-scan */}
+          {/* Formulario dinámico post-scan */}
           {productForm && (
-            <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[var(--accent)]">
-                Producto detectado
-              </p>
-              <p className="mb-4 text-sm font-medium text-[var(--foreground)]">
-                {productForm.productLabel}
-              </p>
+            <div className={`rounded-xl border p-4 ${productForm.mode === "new" ? "border-[#00E5FF]/30 bg-[#00E5FF]/5" : "border-[var(--accent)]/30 bg-[var(--accent)]/5"}`}>
+              <div className="mb-4">
+                <p className={`text-xs font-semibold uppercase tracking-widest mb-1 ${productForm.mode === "new" ? "text-[#00E5FF]" : "text-[var(--accent)]"}`}>
+                  {productForm.mode === "new" ? "✦ Producto nuevo — Completa los datos" : "Producto detectado"}
+                </p>
+                {productForm.mode === "existing" && (
+                  <p className="text-sm font-medium text-[var(--foreground)]">{productForm.productLabel}</p>
+                )}
+                {productForm.mode === "new" && (
+                  <p className="text-xs text-[#555]">SKU: <span className="font-mono text-[#00E5FF]">{productForm.sku}</span> — no existe aún en tu catálogo</p>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {/* Cantidad */}
+                {/* Campos exclusivos para productos NUEVOS */}
+                {productForm.mode === "new" && (
+                  <>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-[#666]">Marca <span className="text-[var(--negative)]">*</span></label>
+                      <input id="new-brand" type="text" placeholder="Ej: Perfect Sport" value={productForm.brand}
+                        onChange={(e) => setProductForm((f) => f && { ...f, brand: e.target.value })}
+                        className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#00E5FF]" autoFocus />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-[#666]">Nombre del Producto <span className="text-[var(--negative)]">*</span></label>
+                      <input id="new-name" type="text" placeholder="Ej: Ultra Fuel" value={productForm.name}
+                        onChange={(e) => setProductForm((f) => f && { ...f, name: e.target.value })}
+                        className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#00E5FF]" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-[#666]">Sabor <span className="text-[var(--negative)]">*</span></label>
+                      <input id="new-flavor" type="text" placeholder="Ej: Chocolate, Fresa, Sin Sabor..." value={productForm.flavor}
+                        onChange={(e) => setProductForm((f) => f && { ...f, flavor: e.target.value })}
+                        className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#00E5FF]" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-[#666]">Tamaño / Presentación <span className="text-[var(--negative)]">*</span></label>
+                      <input id="new-size" type="text" placeholder="Ej: 4 lbs, 2 kg, 30 servicios..." value={productForm.size}
+                        onChange={(e) => setProductForm((f) => f && { ...f, size: e.target.value })}
+                        className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#00E5FF]" />
+                    </div>
+                    <div className="flex flex-col gap-1.5 sm:col-span-2">
+                      <label className="text-xs font-medium text-[#666]">Categoría</label>
+                      <select id="new-category" value={productForm.category}
+                        onChange={(e) => setProductForm((f) => f && { ...f, category: e.target.value })}
+                        className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#00E5FF]">
+                        {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2 border-t border-[#222] pt-3">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-[var(--accent)] mb-3">Datos de importación</p>
+                    </div>
+                  </>
+                )}
+
+                {/* Campos comunes */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-[#666]">
-                    Cantidad <span className="text-[var(--negative)]">*</span>
-                  </label>
-                  <input
-                    id="quick-quantity"
-                    type="number"
-                    min="1"
-                    placeholder="Ej: 24"
-                    value={productForm.quantity}
+                  <label className="text-xs font-medium text-[#666]">Cantidad <span className="text-[var(--negative)]">*</span></label>
+                  <input id="quick-quantity" type="number" min="1" placeholder="Ej: 24" value={productForm.quantity}
                     onChange={(e) => setProductForm((f) => f && { ...f, quantity: e.target.value })}
                     className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--ring)]"
-                    autoFocus
-                  />
+                    autoFocus={productForm.mode === "existing"} />
                 </div>
-
-                {/* Costo USA */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-[#666]">
-                    Costo USA / unidad <span className="text-[var(--negative)]">*</span>
-                  </label>
+                  <label className="text-xs font-medium text-[#666]">Costo USA / unidad <span className="text-[var(--negative)]">*</span></label>
                   <div className="relative">
-                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-[#555]">
-                      $
-                    </span>
-                    <input
-                      id="quick-cost"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={productForm.costUsa}
+                    <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-[#555]">$</span>
+                    <input id="quick-cost" type="number" min="0" step="0.01" placeholder="0.00" value={productForm.costUsa}
                       onChange={(e) => setProductForm((f) => f && { ...f, costUsa: e.target.value })}
-                      className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] pl-7 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--ring)]"
-                    />
+                      className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] pl-7 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--ring)]" />
                   </div>
                 </div>
-
-                {/* Fecha de expiración */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-[#666]">
-                    Fecha de Expiración <span className="text-[var(--negative)]">*</span>
-                  </label>
-                  <input
-                    id="quick-expiry"
-                    type="date"
-                    value={productForm.expirationDate}
+                  <label className="text-xs font-medium text-[#666]">Fecha de Expiración <span className="text-[var(--negative)]">*</span></label>
+                  <input id="quick-expiry" type="date" value={productForm.expirationDate}
                     onChange={(e) => setProductForm((f) => f && { ...f, expirationDate: e.target.value })}
-                    className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--ring)]"
-                  />
+                    className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--ring)]" />
                 </div>
-
-                {/* Margen */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-[#666]">
-                    Margen de Ganancia (%)
-                  </label>
+                  <label className="text-xs font-medium text-[#666]">Margen de Ganancia (%)</label>
                   <div className="relative">
-                    <input
-                      id="quick-margin"
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      placeholder="15"
-                      value={productForm.marginPercent}
+                    <input id="quick-margin" type="number" min="0" step="0.5" placeholder="15" value={productForm.marginPercent}
                       onChange={(e) => setProductForm((f) => f && { ...f, marginPercent: e.target.value })}
-                      className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--ring)]"
-                    />
-                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-[#555]">
-                      %
-                    </span>
+                      className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--ring)]" />
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-[#555]">%</span>
                   </div>
                 </div>
               </div>
@@ -361,12 +426,7 @@ export default function ImportsPage() {
                 <Button id="add-to-cart-btn" variant="positive" onClick={handleAddToCart}>
                   ✓ Agregar al Carrito
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setProductForm(null);
-                    setLookupError(null);
-                  }}
+                <Button variant="outline" onClick={() => { setProductForm(null); setLookupError(null); }}
                 >
                   Cancelar
                 </Button>
@@ -411,8 +471,8 @@ export default function ImportsPage() {
                         className="transition-colors hover:bg-[var(--border)]/20"
                       >
                         <td className="py-3 pr-4">
-                          <p className="font-medium text-[var(--foreground)]">{item.productBrand} {item.productName}</p>
-                          <p className="text-xs text-[#555]">{item.productSize}</p>
+                          <p className="font-medium text-[var(--foreground)]">{cartItemLabel(item)}</p>
+                          <p className="text-xs text-[#555]">{item._isNew ? <span className="text-[#00E5FF]">[NUEVO]</span> : item.productSize}</p>
                         </td>
                         <td className="py-3 pr-4 text-right font-mono">{item.quantity}</td>
                         <td className="py-3 pr-4 text-right font-mono text-[var(--positive)]">
