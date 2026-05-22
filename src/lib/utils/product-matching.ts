@@ -48,18 +48,28 @@ const DIMENSIONS_LIBRARY: Record<string, Dimensions> = {
   "default": { length: 4.00, width: 4.00, height: 6.00, category: "Otros" }
 };
 
-export function findBestDimensions(brand: string, name: string, size: string): Dimensions {
-  const b = brand.toLowerCase();
-  const n = name.toLowerCase();
-  const s = size.toLowerCase();
+export function findBestDimensions(brand: string, name: string, size: string, categoryStr?: string): Dimensions {
+  const b = brand.toLowerCase().trim();
+  const n = name.toLowerCase().trim();
+  
+  // Normalizar strings de tamaño (quitar espacios, igualar libras/gramos)
+  const s = size.toLowerCase()
+    .replace(/libras?/g, 'lb')
+    .replace(/\s+lbs?/g, 'lb')
+    .replace(/lbs?/g, 'lb')
+    .replace(/gramos?/g, 'g')
+    .replace(/\s+g/g, 'g')
+    .replace(/\s+/g, ''); // Remover todos los espacios restantes para fácil búsqueda (ej: "4lb", "300g")
+    
+  const cat = (categoryStr || "").toLowerCase().trim();
 
   // 1. Specific Product Matches (Highest Precision)
   if (b.includes("dymatize") || n.includes("iso100")) {
-    if (s.includes("5")) return DIMENSIONS_LIBRARY["protein-5lb-compact"];
+    if (s.includes("5lb")) return DIMENSIONS_LIBRARY["protein-5lb-compact"];
   }
   
   if (n.includes("serious mass") || n.includes("mass gainer")) {
-    if (s.includes("12") || s.includes("10")) return DIMENSIONS_LIBRARY["mass-gainer-12lb"];
+    if (s.includes("12lb") || s.includes("10lb")) return DIMENSIONS_LIBRARY["mass-gainer-12lb"];
   }
 
   if (b.includes("animal") && n.includes("pak")) {
@@ -72,42 +82,49 @@ export function findBestDimensions(brand: string, name: string, size: string): D
 
   // 2. Size/Category Matches
   // Proteins
-  if (s.includes("11 lb") || s.includes("10 lb")) {
+  if (s.includes("11lb") || s.includes("10lb")) {
     return DIMENSIONS_LIBRARY["protein-bag-10lb"];
   }
-  if (s.includes("5 lb") || s.includes("5lb")) {
+  if (s.includes("5lb")) {
     return DIMENSIONS_LIBRARY["protein-5lb-standard"];
   }
-  if (s.includes("4 lb") || s.includes("4lb")) {
+  if (s.includes("4lb")) {
     return DIMENSIONS_LIBRARY["protein-4lb-standard"];
   }
-  if (s.includes("2 lb") || s.includes("2lb") || s.includes("2.2") || s.includes("1 kg") || s.includes("1kg")) {
+  if (s.includes("2lb") || s.includes("2.2") || s.includes("1kg")) {
     // Check if it's a bag (common for MyProtein 2.2lb)
     if (b.includes("myprotein") || n.includes("impact")) return DIMENSIONS_LIBRARY["protein-bag-1kg"];
     return DIMENSIONS_LIBRARY["protein-2lb-standard"];
   }
 
   // Creatines
-  if (n.includes("creatine") || n.includes("creatina")) {
-    if (s.includes("600")) return DIMENSIONS_LIBRARY["creatine-600g"];
-    if (s.includes("400")) return DIMENSIONS_LIBRARY["creatine-400g"];
-    return DIMENSIONS_LIBRARY["creatine-300g"];
+  if (n.includes("creatine") || n.includes("creatina") || cat.includes("creatina")) {
+    if (s.includes("600g") || s.includes("600")) return DIMENSIONS_LIBRARY["creatine-600g"];
+    if (s.includes("400g") || s.includes("400")) return DIMENSIONS_LIBRARY["creatine-400g"];
+    return DIMENSIONS_LIBRARY["creatine-300g"]; // Default creatina 300g
   }
 
   // Pre-works
-  if (n.includes("pre-workout") || n.includes("c4") || n.includes("nitraflex") || n.includes("curse")) {
+  if (n.includes("pre-workout") || n.includes("c4") || n.includes("nitraflex") || n.includes("curse") || cat.includes("pre-entreno")) {
     return DIMENSIONS_LIBRARY["pre-workout-30serv"];
   }
 
   // Burners
-  if (n.includes("lipo") || n.includes("hydroxycut") || n.includes("burner")) {
+  if (n.includes("lipo") || n.includes("hydroxycut") || n.includes("burner") || cat.includes("quemador")) {
     if (s.includes("100")) return DIMENSIONS_LIBRARY["burner-100caps"];
     return DIMENSIONS_LIBRARY["burner-60caps"];
   }
 
-  // Fallback by Category Keywords
-  if (n.includes("whey") || n.includes("protein") || n.includes("proteina")) return DIMENSIONS_LIBRARY["protein-5lb-standard"];
-  if (n.includes("vitamin") || n.includes("multi")) return DIMENSIONS_LIBRARY["vitamins-standard"];
+  // Fallback by Category Keywords / Category Field
+  if (n.includes("whey") || n.includes("protein") || n.includes("proteina") || cat.includes("proteína")) {
+    // Si sabemos que es proteína pero no agarró tamaño arriba (porque no decía lbs, etc.), asumimos el tamaño por defecto de proteína
+    return DIMENSIONS_LIBRARY["protein-5lb-standard"];
+  }
+  
+  if (n.includes("vitamin") || n.includes("multi") || cat.includes("vitamina") || cat.includes("mineral")) {
+    return DIMENSIONS_LIBRARY["vitamins-standard"];
+  }
 
+  // Si todo lo demás falla, usar un tamaño default intermedio (bote genérico en vez de cajita de vitaminas)
   return DIMENSIONS_LIBRARY["default"];
 }

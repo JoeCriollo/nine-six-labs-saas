@@ -95,7 +95,7 @@ export async function processImport(
       }
 
       // Obtener dimensiones del cerebro volumétrico (product-matching)
-      const bestDim = findBestDimensions(product.brand, product.name, product.size);
+      const bestDim = findBestDimensions(product.brand, product.name, product.size, product.category);
 
       const itemVolume = bestDim.length * bestDim.width * bestDim.height;
       totalVolumeSum += itemVolume * dto.quantity;
@@ -129,7 +129,7 @@ export async function processImport(
         },
       });
 
-      const bestDim = findBestDimensions(product.brand, product.name, product.size);
+      const bestDim = findBestDimensions(product.brand, product.name, product.size, product.category);
       const itemVolume = bestDim.length * bestDim.width * bestDim.height;
       totalVolumeSum += itemVolume * dto.quantity;
 
