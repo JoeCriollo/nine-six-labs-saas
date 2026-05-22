@@ -86,26 +86,75 @@ export async function updateImportLoteNumber(importId: string, newNumber: number
   }
 }
 
-export async function getDashboardKPIs() {
+export type DashboardPeriod = 'all' | 'month' | 'last_month' | '7d' | 'year';
+
+function getDateRange(period: DashboardPeriod): { gte?: Date; lte?: Date } {
+  const now = new Date();
+  if (period === 'all') return {};
+  if (period === '7d') {
+    const d = new Date(now); d.setDate(d.getDate() - 7);
+    return { gte: d };
+  }
+  if (period === 'month') {
+    return { gte: new Date(now.getFullYear(), now.getMonth(), 1) };
+  }
+  if (period === 'last_month') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    return { gte: start, lte: end };
+  }
+  if (period === 'year') {
+    return { gte: new Date(now.getFullYear(), 0, 1) };
+  }
+  return {};
+}
+
+function getPreviousDateRange(period: DashboardPeriod): { gte?: Date; lte?: Date } {
+  const now = new Date();
+  if (period === 'all' || period === 'last_month') return {};
+  if (period === '7d') {
+    const start = new Date(now); start.setDate(start.getDate() - 14);
+    const end   = new Date(now); end.setDate(end.getDate() - 7);
+    return { gte: start, lte: end };
+  }
+  if (period === 'month') {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    return { gte: start, lte: end };
+  }
+  if (period === 'year') {
+    return { gte: new Date(now.getFullYear() - 1, 0, 1), lte: new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59) };
+  }
+  return {};
+}
+
+export async function getDashboardKPIs(period: DashboardPeriod = 'all') {
   try {
-    // 1. Sales and COGS
-    const allSales = await db.sale.findMany({
-      include: {
-        payments: true,
-        items: {
-          include: {
-            lot: {
-              include: { product: true }
-            }
+    const dateRange = getDateRange(period);
+    const prevRange = getPreviousDateRange(period);
+
+    // 1. Sales filtered by period
+    const [allSales, prevSales] = await Promise.all([
+      db.sale.findMany({
+        where: dateRange.gte || dateRange.lte ? { date: dateRange } : undefined,
+        include: {
+          payments: true,
+          items: {
+            include: { lot: { include: { product: true } } }
           }
         }
-      }
-    });
+      }),
+      (prevRange.gte ? db.sale.findMany({
+        where: { date: prevRange },
+        include: { payments: true }
+      }) : Promise.resolve([])),
+    ]);
 
     let totalSales = 0;
     let totalCogs = 0;
     let accountsReceivableTotal = 0;
     const categoryProfitMap: Record<string, number> = {};
+    const productSalesMap: Record<string, { name: string; brand: string; unitsSold: number; revenue: number }> = {};
 
     for (const sale of allSales) {
       totalSales += sale.totalAmount;
@@ -115,91 +164,162 @@ export async function getDashboardKPIs() {
       for (const item of sale.items) {
         const itemCogs = item.lot.landedCost * item.quantity;
         const itemRevenue = item.priceSale * item.quantity;
-        const itemProfit = itemRevenue - itemCogs;
         totalCogs += itemCogs;
 
-        const category = item.lot.product.category || "Otros";
-        categoryProfitMap[category] = (categoryProfitMap[category] || 0) + itemProfit;
+        const category = item.lot.product.category || 'Otros';
+        categoryProfitMap[category] = (categoryProfitMap[category] || 0) + (itemRevenue - itemCogs);
+
+        const pid = item.lot.productId;
+        if (!productSalesMap[pid]) {
+          productSalesMap[pid] = { name: item.lot.product.name, brand: item.lot.product.brand, unitsSold: 0, revenue: 0 };
+        }
+        productSalesMap[pid].unitsSold += item.quantity;
+        productSalesMap[pid].revenue  += itemRevenue;
       }
     }
 
     const grossProfit = totalSales - totalCogs;
 
-    // 2. Expenses (All time for total calculation or filtered if needed, but user said "all records in Expense table")
-    const allExpenses = await db.expense.findMany();
+    // Previous period KPIs
+    const prevTotalSales = prevSales.reduce((acc, s) => acc + s.totalAmount, 0);
+
+    // 2. Expenses filtered by period
+    const [allExpenses, prevExpenses] = await Promise.all([
+      db.expense.findMany({ where: dateRange.gte || dateRange.lte ? { date: dateRange } : undefined }),
+      (prevRange.gte ? db.expense.findMany({ where: { date: prevRange } }) : Promise.resolve([])),
+    ]);
     const totalExpenses = allExpenses.reduce((acc, e) => acc + e.amount, 0);
+    const prevTotalExpenses = prevExpenses.reduce((acc, e) => acc + e.amount, 0);
 
     const netProfit = grossProfit - totalExpenses;
     const operatingExpenses = totalExpenses + totalCogs;
 
-    // 3. Critical alerts count (low stock & expiring soon)
+    // Previous period net profit (simplified: prevSales - prevExpenses, COGS not re-calculated for prev)
+    const prevNetProfit = prevTotalSales - prevTotalExpenses;
+
+    // Growth percentages
+    const calcGrowth = (curr: number, prev: number) =>
+      prev === 0 ? null : ((curr - prev) / Math.abs(prev)) * 100;
+
+    const growthSales  = calcGrowth(totalSales, prevTotalSales);
+    const growthProfit = calcGrowth(netProfit, prevNetProfit);
+
+    // 3. Inventory Value (all active lots, not period-filtered — this is a snapshot)
+    const activeLots = await db.lot.findMany({
+      where: { currentQuantity: { gt: 0 } },
+      select: { currentQuantity: true, landedCost: true, priceSale: true }
+    });
+    const inventoryValue     = activeLots.reduce((acc, l) => acc + l.currentQuantity * l.landedCost, 0);
+    const projectedProfit    = activeLots.reduce((acc, l) => acc + l.currentQuantity * (l.priceSale - l.landedCost), 0);
+
+    // 4. Expiring lots alert
     const expiringLots = await db.lot.count({
       where: {
         currentQuantity: { gt: 0 },
-        expirationDate: {
-          lte: new Date(new Date().getTime() + 90 * 24 * 60 * 60 * 1000) // <= 90 days
-        }
+        expirationDate: { lte: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) }
       }
     });
 
-    // 5. Sales Performance (last 7 days)
+    // 5. Critical stock alert (≤3 units)
+    const criticalStockLots = await db.lot.findMany({
+      where: { currentQuantity: { gt: 0, lte: 3 } },
+      include: { product: { select: { name: true, brand: true } } },
+      take: 5
+    });
+
+    // 6. Overdue debt customers
+    const now = new Date();
+    const overdueSales = await db.sale.findMany({
+      where: { paymentType: 'CREDIT', dueDate: { lt: now } },
+      include: {
+        customer: { select: { name: true } },
+        payments: true,
+      },
+      take: 5
+    });
+    const overdueCustomers = overdueSales
+      .map(s => {
+        const paid = s.payments.reduce((a, p) => a + p.amount, 0);
+        const remaining = s.totalAmount - paid;
+        return remaining > 0.01 ? { name: s.customer.name, amount: remaining } : null;
+      })
+      .filter(Boolean);
+
+    // 7. Performance chart (last 7 days)
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
     const performanceSales = await db.sale.findMany({
       where: { date: { gte: sevenDaysAgo } },
       orderBy: { date: 'asc' }
     });
-
-    // Group by date
     const performanceMap: Record<string, number> = {};
-    for (let i = 0; i < 7; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
       performanceMap[d.toISOString().split('T')[0]] = 0;
     }
-
     for (const sale of performanceSales) {
       const dateStr = new Date(sale.date).toISOString().split('T')[0];
-      if (performanceMap[dateStr] !== undefined) {
-        performanceMap[dateStr] += sale.totalAmount;
-      }
+      if (performanceMap[dateStr] !== undefined) performanceMap[dateStr] += sale.totalAmount;
     }
+    const performanceData = Object.entries(performanceMap).map(([date, total]) => ({ date, total }));
 
-    const performanceData = Object.entries(performanceMap)
-      .map(([date, total]) => ({ date, total }))
-      .reverse();
-
-    // 6. Recent Sales
+    // 8. Recent Sales
     const recentSales = await db.sale.findMany({
       take: 5,
       orderBy: { date: 'desc' },
-      include: {
-        customer: true,
-        items: {
-          include: {
-            lot: {
-              include: { product: true }
-            }
-          }
-        }
-      }
+      where: dateRange.gte || dateRange.lte ? { date: dateRange } : undefined,
+      include: { customer: true, items: { include: { lot: { include: { product: true } } } } }
     });
+
+    // 9. Top products
+    const topProducts = Object.values(productSalesMap)
+      .sort((a, b) => b.unitsSold - a.unitsSold)
+      .slice(0, 5);
+
+    // 10. Top customers
+    const customerMap: Record<string, { name: string; totalSpent: number; purchaseCount: number }> = {};
+    for (const sale of allSales) {
+      if (!customerMap[sale.customerId]) {
+        const found = recentSales.find(s => s.customerId === sale.customerId);
+        customerMap[sale.customerId] = { name: found?.customer?.name || 'Cliente', totalSpent: 0, purchaseCount: 0 };
+      }
+      customerMap[sale.customerId].totalSpent += sale.totalAmount;
+      customerMap[sale.customerId].purchaseCount += 1;
+    }
+    // Need actual customer names — fetch them separately
+    const customerIds = Object.keys(customerMap);
+    const customers = customerIds.length > 0 ? await db.customer.findMany({
+      where: { id: { in: customerIds } },
+      select: { id: true, name: true }
+    }) : [];
+    for (const c of customers) {
+      if (customerMap[c.id]) customerMap[c.id].name = c.name;
+    }
+    const topCustomers = Object.values(customerMap)
+      .sort((a, b) => b.totalSpent - a.totalSpent)
+      .slice(0, 5);
 
     return {
       success: true,
       data: {
-        totalSales,
-        totalCogs,
-        grossProfit,
-        totalExpenses,
-        netProfit,
-        operatingExpenses,
+        period,
+        // Core KPIs
+        totalSales, totalCogs, grossProfit,
+        totalExpenses, netProfit, operatingExpenses,
         accountsReceivableTotal,
+        // Growth
+        growthSales, growthProfit,
+        // Inventory snapshot
+        inventoryValue, projectedProfit,
+        // Alerts
         criticalAlertsCount: expiringLots,
-        recentSales,
-        performanceData,
-        categoryProfit: categoryProfitMap
+        criticalStockLots,
+        overdueCustomers,
+        // Charts
+        recentSales, performanceData,
+        categoryProfit: categoryProfitMap,
+        // Rankings
+        topProducts, topCustomers,
       }
     };
   } catch (error) {
@@ -207,6 +327,8 @@ export async function getDashboardKPIs() {
     return { success: false, error: 'Fallo al obtener KPIs' };
   }
 }
+
+
 
 export async function deleteLot(lotId: string) {
   try {
