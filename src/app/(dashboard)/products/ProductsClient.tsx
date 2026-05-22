@@ -13,17 +13,18 @@ export default function ProductsClient({ products }: { products: any[] }) {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<string>("TODOS");
 
-  const categories = ["Proteína", "Creatina", "Pre-Work", "Vitaminas", "Quemadores", "Aminoácidos", "Otros"];
+  const categories = ["Proteínas", "Creatinas", "Pre-Entrenos", "Aminoácidos", "Vitaminas", "Minerales", "Quemadores"];
 
   const getCategoryColor = (cat: string) => {
     switch (cat) {
-      case "Proteína": return "bg-blue-500/20 text-blue-400 border-blue-500/30";
-      case "Creatina": return "bg-purple-500/20 text-purple-400 border-purple-500/30";
-      case "Pre-Work": return "bg-red-500/20 text-red-400 border-red-500/30";
-      case "Vitaminas": return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
-      case "Quemadores": return "bg-orange-600/20 text-orange-400 border-orange-500/30";
-      case "Aminoácidos": return "bg-green-500/20 text-green-400 border-green-500/30";
-      default: return "bg-gray-500/20 text-gray-400 border-gray-500/30";
+      case "Proteínas":   return "bg-blue-500/20 text-blue-300 border-blue-500/40";
+      case "Creatinas":   return "bg-purple-500/20 text-purple-300 border-purple-500/40";
+      case "Pre-Entrenos": return "bg-red-500/20 text-red-300 border-red-500/40";
+      case "Aminoácidos": return "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
+      case "Vitaminas":   return "bg-yellow-400/20 text-yellow-300 border-yellow-400/40";
+      case "Minerales":   return "bg-cyan-500/20 text-cyan-300 border-cyan-500/40";
+      case "Quemadores":  return "bg-orange-500/20 text-orange-300 border-orange-500/40";
+      default:            return "bg-gray-500/20 text-gray-300 border-gray-500/40";
     }
   };
 
