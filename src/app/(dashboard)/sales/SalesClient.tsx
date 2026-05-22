@@ -352,10 +352,10 @@ export default function SalesClient({ customers, products }: { customers: any[],
 
             {paymentType === "CREDIT" && (
               <div className="space-y-2 p-3 bg-[#1a1a1a] border border-[#333] rounded-md">
-                <label className="text-sm text-[#888]">Pago Inicial (Anticipo Mínimo 50%)</label>
+                <label className="text-sm text-[#888]">Pago Inicial (Opcional)</label>
                 <Input 
                   type="number" 
-                  placeholder={`Mínimo $${((totalAmount - (useWallet ? Math.min(customers.find(c => c.id === customerId)?.walletBalance || 0, totalAmount) : 0)) * 0.5).toFixed(2)}`}
+                  placeholder={`Ej. $0.00`}
                   value={upfrontPayment}
                   onChange={(e) => setUpfrontPayment(e.target.value)}
                 />

@@ -117,9 +117,8 @@ export async function processSale(data: ProcessSaleInput) {
 
       // 2. Validate Payment
       if (data.paymentType === 'CREDIT') {
-        const minimumUpfront = finalPayableAmount * 0.5;
-        if (data.upfrontPaymentAmount < minimumUpfront) {
-          throw new Error(`Venta a crédito requiere mínimo 50% de anticipo ($${minimumUpfront.toFixed(2)})`);
+        if (data.upfrontPaymentAmount < 0) {
+          throw new Error(`El pago inicial no puede ser negativo`);
         }
       } else {
         // FULL payment means upfront must match final payable
