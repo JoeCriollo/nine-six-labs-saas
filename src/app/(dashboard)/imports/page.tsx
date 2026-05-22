@@ -44,7 +44,6 @@ interface NewProductForm {
   name: string;
   flavor: string;
   weight: string; // Ej: 300g, 4 lbs, 120
-  format: string; // Ej: Servicios, Cápsulas, Tableta
   servings: string;
   category: string;
   quantity: string;
@@ -120,7 +119,6 @@ export default function ImportsPage() {
         name: "",
         flavor: "",
         weight: "",
-        format: "",
         servings: "",
         category: "Proteínas",
         quantity: "",
@@ -179,9 +177,7 @@ export default function ImportsPage() {
       if (!productForm.flavor.trim()) return setLookupError("El sabor es requerido.");
       if (!productForm.weight.trim()) return setLookupError("El peso/cantidad es requerido.");
 
-      const combinedSize = productForm.format.trim() 
-        ? `${productForm.weight.trim()} (${productForm.format.trim()})`
-        : productForm.weight.trim();
+      const combinedSize = productForm.weight.trim();
 
       const newItem: NewCartItem = {
         _cartId: uid(),
@@ -387,14 +383,8 @@ export default function ImportsPage() {
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-medium text-[#666]">Peso Neto / Cantidad <span className="text-[var(--negative)]">*</span></label>
-                      <input id="new-weight" type="text" placeholder="Ej: 300g, 4 lbs, 120" value={productForm.weight}
+                      <input id="new-weight" type="text" placeholder="Ej: 300g, 5 Lbs, 120 Cápsulas" value={productForm.weight}
                         onChange={(e) => setProductForm((f) => f && { ...f, weight: e.target.value })}
-                        className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#00E5FF]" />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-medium text-[#666]">Formato (Gramos, Lbs, Caps)</label>
-                      <input id="new-format" type="text" placeholder="Ej: Lbs, Cápsulas..." value={productForm.format}
-                        onChange={(e) => setProductForm((f) => f && { ...f, format: e.target.value })}
                         className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#00E5FF]" />
                     </div>
                     <div className="flex flex-col gap-1.5">
