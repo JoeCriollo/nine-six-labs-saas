@@ -43,7 +43,8 @@ interface NewProductForm {
   brand: string;
   name: string;
   flavor: string;
-  size: string;
+  weight: string; // Ej: 300g, 4 lbs, 120
+  format: string; // Ej: Servicios, Cápsulas, Tableta
   category: string;
   quantity: string;
   costUsa: string;
@@ -53,7 +54,15 @@ interface NewProductForm {
 
 type ProductFormState = ExistingProductForm | NewProductForm;
 
-const CATEGORIES = ["Proteínas", "Pre-Entrenos", "Aminoácidos", "Vitaminas", "Quemadores", "Carbohidratos", "Recuperación", "General"];
+const CATEGORIES = [
+  "Proteínas",
+  "Pre-Entrenos",
+  "Aminoácidos",
+  "Creatinas",
+  "Vitaminas",
+  "Minerales",
+  "Quemadores",
+];
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -109,8 +118,9 @@ export default function ImportsPage() {
         brand: "",
         name: "",
         flavor: "",
-        size: "",
-        category: "General",
+        weight: "",
+        format: "",
+        category: "Proteínas",
         quantity: "",
         costUsa: "",
         expirationDate: "",
@@ -165,7 +175,11 @@ export default function ImportsPage() {
       if (!productForm.brand.trim()) return setLookupError("La marca es requerida.");
       if (!productForm.name.trim()) return setLookupError("El nombre del producto es requerido.");
       if (!productForm.flavor.trim()) return setLookupError("El sabor es requerido.");
-      if (!productForm.size.trim()) return setLookupError("El tamaño/presentación es requerido.");
+      if (!productForm.weight.trim()) return setLookupError("El peso/cantidad es requerido.");
+
+      const combinedSize = productForm.format.trim() 
+        ? `${productForm.weight.trim()} (${productForm.format.trim()})`
+        : productForm.weight.trim();
 
       const newItem: NewCartItem = {
         _cartId: uid(),
@@ -174,7 +188,7 @@ export default function ImportsPage() {
         brand: productForm.brand.trim(),
         name: productForm.name.trim(),
         flavor: productForm.flavor.trim(),
-        size: productForm.size.trim(),
+        size: combinedSize,
         category: productForm.category,
         quantity: qty,
         costUsa: cost,
@@ -369,9 +383,15 @@ export default function ImportsPage() {
                         className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#00E5FF]" />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-medium text-[#666]">Tamaño / Presentación <span className="text-[var(--negative)]">*</span></label>
-                      <input id="new-size" type="text" placeholder="Ej: 4 lbs, 2 kg, 30 servicios..." value={productForm.size}
-                        onChange={(e) => setProductForm((f) => f && { ...f, size: e.target.value })}
+                      <label className="text-xs font-medium text-[#666]">Peso Neto / Cantidad <span className="text-[var(--negative)]">*</span></label>
+                      <input id="new-weight" type="text" placeholder="Ej: 300g, 4 lbs, 120" value={productForm.weight}
+                        onChange={(e) => setProductForm((f) => f && { ...f, weight: e.target.value })}
+                        className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#00E5FF]" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-[#666]">Formato / Servicios</label>
+                      <input id="new-format" type="text" placeholder="Ej: 60 Serv, Cápsulas..." value={productForm.format}
+                        onChange={(e) => setProductForm((f) => f && { ...f, format: e.target.value })}
                         className="h-10 w-full rounded-md border border-[var(--border)] bg-[var(--input)] px-3 text-sm focus:outline-none focus:ring-1 focus:ring-[#00E5FF]" />
                     </div>
                     <div className="flex flex-col gap-1.5 sm:col-span-2">
